@@ -1,0 +1,5 @@
+coredns (0-0) UNRELEASED; urgency=medium
+
+  * CoreDNS with PForward for Debian
+
+ -- newco <newcoderlife@gmail.com>  Sun, 07 Aug 2022 14:00:00 +0800

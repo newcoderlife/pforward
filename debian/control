@@ -1,0 +1,10 @@
+Source: coredns
+Maintainer: Newco <newcoderlife@gmail.com>
+Build-Depends: debhelper (>= 9), ca-certificates, curl, base-files (>= 11.1~) | dh-systemd, lsb-release, jq
+
+Package: coredns
+Architecture: any
+Section: net
+Priority: optional
+Description: CoreDNS with PForward
+Depends: adduser

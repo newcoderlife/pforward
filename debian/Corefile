@@ -1,0 +1,10 @@
+# Default Corefile, see https://coredns.io for more information.
+
+. {
+    pforward {
+        policy default 114.114.114.114
+    }
+    cache
+    log
+    errors
+}

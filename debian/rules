@@ -1,0 +1,20 @@
+#!/usr/bin/make -ef
+
+include /usr/share/dpkg/architecture.mk
+
+%:
+	dh_clean
+	dh $@ --with systemd
+
+override_dh_strip:
+override_dh_auto_clean:
+override_dh_auto_test:
+override_dh_auto_build:
+override_dh_auto_install:
+	mkdir -p debian/coredns/usr/bin debian/coredns/etc/coredns debian/man
+	cp $(BIN) debian/coredns/usr/bin
+	cp $(SRC)/man/* debian/man
+	cp debian/Corefile debian/coredns/etc/coredns/Corefile
+
+override_dh_gencontrol:
+	dh_gencontrol -- -$(VERSION)-0~$(shell lsb_release -sr)0

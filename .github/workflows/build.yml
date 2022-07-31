@@ -1,0 +1,65 @@
+name: Build CoreDNS With PForward
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  Build-CoreDNS-With-PForward:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Environment
+        run: env
+
+      - name: Clone PForward
+        uses: actions/checkout@v3
+        with:
+          path: pforward
+
+      - name: Clone CoreDNS
+        uses: actions/checkout@v3
+        with:
+          repository: coredns/coredns
+          path: coredns
+
+      - name: Prepare Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+          cache: true
+          cache-dependency-path: |
+            coredns/go.sum
+            pforward/go.sum
+
+      - name: Make CoreDNS
+        run: |
+          cd $GITHUB_WORKSPACE/coredns
+          echo "pforward:github.com/newcoderlife/pforward" >> plugin.cfg
+          make gen
+          go get github.com/newcoderlife/pforward@$GITHUB_REF_NAME && go mod tidy
+          make
+
+      - name: Upload Binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: coredns-${{ github.ref_name }}
+          path: coredns/coredns
+      
+      - name: Package CoreDNS
+        env:
+          BIN: ${{ github.workspace }}/coredns/coredns
+          SRC: ${{ github.workspace }}/coredns
+          VERSION: ${{ github.ref_name }}
+          SHELL: /usr/bin/bash
+        run: |
+          sudo apt install debhelper dh-systemd base-files -y
+          cd $GITHUB_WORKSPACE/pforward
+          dpkg-buildpackage -us -uc -b
+          echo "DEB=$(find ../ -iname *.deb -exec basename -- {} \;)" >> $GITHUB_ENV
+
+      - name: Upload Package
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.DEB }}
+          path: ${{ github.workspace }}/${{ env.DEB }}
