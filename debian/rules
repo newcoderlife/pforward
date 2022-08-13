@@ -15,6 +15,7 @@ override_dh_auto_install:
 	cp $(BIN) debian/coredns/usr/bin
 	cp $(SRC)/man/* debian/man
 	cp debian/Corefile debian/coredns/etc/coredns/Corefile
+	cp debian/GeoLite2-Country.mmdb debian/coredns/etc/coredns/GeoLite2-Country.mmdb
 
 override_dh_gencontrol:
 	dh_gencontrol -- -$(VERSION)-0~$(shell lsb_release -sr)0

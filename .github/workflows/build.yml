@@ -37,7 +37,7 @@ jobs:
           cd $GITHUB_WORKSPACE/coredns
           echo "pforward:github.com/newcoderlife/pforward" >> plugin.cfg
           make gen
-          go get github.com/newcoderlife/pforward@$GITHUB_REF_NAME && go mod tidy
+          go get github.com/newcoderlife/pforward@$GITHUB_REF_NAME && go mod tidy -compat=1.17
           make
 
       - name: Upload Binary

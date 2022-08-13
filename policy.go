@@ -13,7 +13,8 @@ type Policy struct {
 
 func MakePolicy() *Policy {
 	return &Policy{
-		rules: make(map[string]string),
+		rules:  make(map[string]string),
+		server: "114.114.114.114",
 	}
 }
 

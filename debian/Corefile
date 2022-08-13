@@ -1,10 +1,18 @@
 # Default Corefile, see https://coredns.io for more information.
 
 . {
+    bind 127.0.0.1
+
     pforward {
-        policy default 114.114.114.114
+        114.114.114.114
+        auto
+        geo /etc/coredns/GeoLite2-Country.mmdb
+        block_ipv6
     }
+
     cache
+
     log
+    debug
     errors
 }
