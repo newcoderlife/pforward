@@ -14,12 +14,13 @@ import (
 var log = clog.NewWithPlugin("pforword")
 
 type PForward struct {
-	Next        plugin.Handler
-	Policy      *Policy
-	AutoServer  string
-	BlockAAAA   bool
-	GeoDatabase *geoip2.Reader
-	Timeout     time.Duration
+	Next             plugin.Handler
+	Policy           *Policy
+	AutoCNServer     string
+	AutoAbroadServer string
+	BlockAAAA        bool
+	GeoDatabase      *geoip2.Reader
+	Timeout          time.Duration
 }
 
 func (PForward) Name() string {
@@ -39,7 +40,7 @@ func (p PForward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		return dns.RcodeServerFailure, fmt.Errorf("block AAAA response")
 	}
 
-	if len(p.AutoServer) > 0 && (question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA) {
+	if len(p.AutoCNServer) > 0 && len(p.AutoAbroadServer) > 0 && (question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA) {
 		return p.AutoServeDNS(ctx, w, r)
 	}
 
@@ -59,47 +60,53 @@ func (p PForward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 }
 
 func (p PForward) AutoServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	result114 := queryDNSWithTimeout(ctx, r, "114.114.114.114:53", time.Millisecond*100)
-	if result114 == nil {
+	resultCN := queryDNSWithTimeout(ctx, r, p.AutoCNServer+":53", p.Timeout)
+	if resultCN == nil {
 		return dns.RcodeServerFailure, fmt.Errorf("invalid DNS response")
 	}
 
 	var abroad bool
-	switch r.Question[0].Qtype {
-	case dns.TypeA:
-		aResponse := result114.Answer[0].(*dns.A)
-		country, err := p.GeoDatabase.Country(aResponse.A)
-		if err != nil {
-			log.Errorf("[AutoServeDNS] request=%s err=%v", r.String(), err)
-			return dns.RcodeServerFailure, err
+	for index, answer := range resultCN.Answer {
+		if abroad {
+			break
 		}
 
-		if country.Country.IsoCode != "CN" {
-			abroad = true
-		}
-	case dns.TypeAAAA:
-		aaaaResponse := result114.Answer[0].(*dns.AAAA)
-		country, err := p.GeoDatabase.Country(aaaaResponse.AAAA)
-		if err != nil {
-			log.Errorf("[AutoServeDNS] request=%s err=%v", r.String(), err)
-			return dns.RcodeServerFailure, err
-		}
+		switch v := answer.(type) {
+		case *dns.A:
+			aResponse := answer.(*dns.A)
+			country, err := p.GeoDatabase.Country(aResponse.A)
+			if err != nil {
+				log.Errorf("[AutoServeDNS] request=%s err=%v", r.String(), err)
+				return dns.RcodeServerFailure, err
+			}
 
-		if country.Country.IsoCode != "CN" {
-			abroad = true
+			if country.Country.IsoCode != "CN" {
+				abroad = true
+			}
+		case *dns.AAAA:
+			aaaaResponse := answer.(*dns.AAAA)
+			country, err := p.GeoDatabase.Country(aaaaResponse.AAAA)
+			if err != nil {
+				log.Errorf("[AutoServeDNS] request=%s err=%v", r.String(), err)
+				return dns.RcodeServerFailure, err
+			}
+
+			if country.Country.IsoCode != "CN" {
+				abroad = true
+			}
+		default:
+			log.Debugf("[AutoServeDNS] index=%d type=%+v answer=%s", index, v.String(), answer.String())
 		}
-	default:
-		return dns.RcodeServerFailure, fmt.Errorf("invalid DNS QType")
 	}
 
-	result := result114
+	result := resultCN
 	if abroad {
-		result = queryDNSWithTimeout(ctx, r, p.AutoServer+":53", time.Millisecond*100)
+		result = queryDNSWithTimeout(ctx, r, p.AutoAbroadServer+":53", p.Timeout)
 		if result == nil {
 			return dns.RcodeServerFailure, fmt.Errorf("DNS query timeout")
 		}
 
-		log.Infof("[AutoServeDNS] find abroad domain=%s", r.Question[0].Name)
+		log.Infof("[AutoServeDNS] find abroad domain=%s upstream=%s", r.Question[0].Name, p.AutoAbroadServer)
 	}
 
 	if err := w.WriteMsg(result); err != nil {

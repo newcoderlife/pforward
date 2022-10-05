@@ -3,6 +3,7 @@ package pforward
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -59,23 +60,23 @@ func load(c *caddy.Controller) (*PForward, error) {
 			log.Infof("[load] file=%s", params[0])
 		case "auto":
 			params := c.RemainingArgs()
-			if len(params) != 1 {
-				return nil, errors.New("invalid auto config")
+			if len(params) != 2 {
+				return nil, plugin.Error("pforward", fmt.Errorf("invalid auto args=%+v", params))
 			}
 
-			p.AutoServer = params[0]
+			p.AutoCNServer, p.AutoAbroadServer = params[0], params[1]
 
-			log.Infof("[load] auto")
+			log.Infof("[load] auto %s %s", p.AutoCNServer, p.AutoAbroadServer)
 		case "geo":
 			params := c.RemainingArgs()
 			if len(params) != 1 {
-				return nil, errors.New("invalid geo config")
+				return nil, plugin.Error("pforward", fmt.Errorf("invalid geo args=%+v", params))
 			}
 
 			var err error
 			p.GeoDatabase, err = geoip2.Open(params[0])
 			if err != nil {
-				return nil, errors.New("invalid geo database")
+				return nil, plugin.Error("pforward", fmt.Errorf("invalid geo database err=%+v", err))
 			}
 
 			log.Infof("[load] load geoip")
@@ -86,12 +87,12 @@ func load(c *caddy.Controller) (*PForward, error) {
 		case "timeout":
 			params := c.RemainingArgs()
 			if len(params) != 1 {
-				return nil, errors.New("invalid timeout config")
+				return nil, plugin.Error("pforward", fmt.Errorf("invalid timeout args=%+v", params))
 			}
 
 			t, err := strconv.Atoi(params[0])
 			if err != nil {
-				return nil, errors.New("invalid timeout config")
+				return nil, plugin.Error("pforward", fmt.Errorf("invalid timeout err=%+v", err))
 			}
 
 			p.Timeout = time.Millisecond * time.Duration(t)

@@ -3,7 +3,7 @@ name: Build CoreDNS With PForward
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 jobs:
   Build-CoreDNS-With-PForward:
@@ -26,7 +26,7 @@ jobs:
       - name: Prepare Golang
         uses: actions/setup-go@v3
         with:
-          go-version: '1.19'
+          go-version: "1.19"
           cache: true
           cache-dependency-path: |
             coredns/go.sum
@@ -37,7 +37,7 @@ jobs:
           cd $GITHUB_WORKSPACE/coredns
           echo "pforward:github.com/newcoderlife/pforward" >> plugin.cfg
           make gen
-          go get github.com/newcoderlife/pforward@$GITHUB_REF_NAME && go mod tidy -compat=1.17
+          go get github.com/newcoderlife/pforward@$GITHUB_SHA && go mod tidy -go=1.16 && go mod tidy -go=1.17
           make
 
       - name: Upload Binary
@@ -45,7 +45,7 @@ jobs:
         with:
           name: coredns-${{ github.ref_name }}
           path: coredns/coredns
-      
+
       - name: Package CoreDNS
         env:
           BIN: ${{ github.workspace }}/coredns/coredns

@@ -1,13 +1,13 @@
 # Default Corefile, see https://coredns.io for more information.
 
 . {
-    bind 127.0.0.1
+    bind 0.0.0.0
 
     pforward {
-        114.114.114.114
-        auto
+        auto 114.114.114.114 1.1.1.1
         geo /etc/coredns/GeoLite2-Country.mmdb
         block_ipv6
+        timeout 1000
     }
 
     cache
