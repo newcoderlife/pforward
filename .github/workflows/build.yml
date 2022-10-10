@@ -3,7 +3,7 @@ name: Build CoreDNS With PForward
 on:
   push:
     tags:
-      - "*"
+      - '*'
 
 jobs:
   Build-CoreDNS-With-PForward:
@@ -39,12 +39,7 @@ jobs:
           make gen
           go get github.com/newcoderlife/pforward@$GITHUB_SHA && go mod tidy -go=1.16 && go mod tidy -go=1.17
           make
-
-      - name: Upload Binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: coredns-${{ github.ref_name }}
-          path: coredns/coredns
+          echo "VERSION=$(git --no-pager log --date=format:%Y%m%d --pretty=0.0~git%cd.%h -1;)" >> $GITHUB_ENV
 
       - name: Package CoreDNS
         env:
@@ -57,6 +52,12 @@ jobs:
           cd $GITHUB_WORKSPACE/pforward
           dpkg-buildpackage -us -uc -b
           echo "DEB=$(find ../ -iname *.deb -exec basename -- {} \;)" >> $GITHUB_ENV
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ env.DEB }}
 
       - name: Upload Package
         uses: actions/upload-artifact@v3

@@ -11,11 +11,13 @@ override_dh_auto_clean:
 override_dh_auto_test:
 override_dh_auto_build:
 override_dh_auto_install:
-	mkdir -p debian/coredns/usr/bin debian/coredns/etc/coredns debian/man
+	mkdir -p debian/coredns/usr/bin debian/coredns/etc/coredns/rules debian/man
 	cp $(BIN) debian/coredns/usr/bin
 	cp $(SRC)/man/* debian/man
 	cp debian/Corefile debian/coredns/etc/coredns/Corefile
 	cp debian/GeoLite2-Country.mmdb debian/coredns/etc/coredns/GeoLite2-Country.mmdb
+	git clone https://github.com/newcoderlife/ruleset.git --depth 1 debian/coredns/etc/coredns/rules/
+	dh_auto_install
 
 override_dh_gencontrol:
 	dh_gencontrol -- -$(VERSION)-0~$(shell lsb_release -sr)0

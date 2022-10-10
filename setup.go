@@ -2,106 +2,119 @@ package pforward
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
-	"strconv"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"github.com/oschwald/geoip2-golang"
+	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/newcoderlife/pforward/forward"
+	"github.com/newcoderlife/pforward/geo"
+	"github.com/newcoderlife/pforward/rule"
 )
+
+var log = clog.NewWithPlugin("pforword")
 
 func init() { plugin.Register("pforward", setup) }
 
 func setup(c *caddy.Controller) error {
-	pForward, err := load(c)
+	inst, err := load(c)
 	if err != nil {
-		log.Fatalf("[setup] load err=%v", err)
+		log.Fatalf("load pforward err=%v", err)
 		return err
 	}
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		pForward.Next = next
-		return pForward
+		inst.Next = next
+		return inst
 	})
-
 	return nil
 }
 
-func load(c *caddy.Controller) (*PForward, error) {
+func load(c *caddy.Controller) (*forward.Instance, error) {
 	c.Next()
 
-	p := &PForward{
-		Policy: MakePolicy(),
+	inst := &forward.Instance{
+		Policy:  new(forward.Policy),
+		Timeout: time.Second * 3,
 	}
 	for c.NextBlock() {
 		name := c.Val()
 		switch name {
-		case "policy": // policy policy_file nameserver
+		case "default":
 			params := c.RemainingArgs()
-			if len(params) != 2 {
-				return nil, errors.New("invalid policy config")
+			if len(params) != 1 {
+				return nil, plugin.Error("load", fmt.Errorf("invalid default args=%+v", params))
 			}
-
-			f, err := os.Open(params[0])
-			if err != nil || f == nil {
-				return nil, errors.New("invalid policy file")
-			}
-			defer f.Close()
-
-			sc := bufio.NewScanner(f)
-			for sc.Scan() {
-				p.Policy.AddRule(sc.Text(), params[1])
-			}
-
-			log.Infof("[load] file=%s", params[0])
-		case "auto":
+			inst.Policy.Default = params[0]
+		case "ruleset":
 			params := c.RemainingArgs()
-			if len(params) != 2 {
-				return nil, plugin.Error("pforward", fmt.Errorf("invalid auto args=%+v", params))
+			if len(params) != 1 {
+				return nil, plugin.Error("load", fmt.Errorf("invalid ruleset args=%+v", params))
 			}
 
-			p.AutoCNServer, p.AutoAbroadServer = params[0], params[1]
+			files, err := os.ReadDir(params[0])
+			if err != nil {
+				return nil, plugin.Error("load", fmt.Errorf("invalid ruleset args=%+v err=%v", params, err))
+			}
 
-			log.Infof("[load] auto %s %s", p.AutoCNServer, p.AutoAbroadServer)
+			inst.Policy.Rule = new(rule.Set)
+			for _, file := range files {
+				if !file.IsDir() && strings.HasSuffix(file.Name(), ".rule") {
+					f, err := os.Open(path.Join(params[0], file.Name()))
+					if err != nil {
+						return nil, plugin.Error("load", fmt.Errorf("invalid rule file=%s err=%v", params[0], err))
+					}
+					defer f.Close()
+
+					var upstream string
+					sc := bufio.NewScanner(f)
+					if sc.Scan() {
+						first := sc.Text()
+						if !strings.HasPrefix(first, "# ") {
+							return nil, plugin.Error("load", fmt.Errorf("invalid rule file=%s first=%s", params[0], first))
+						}
+						upstream = strings.TrimPrefix(first, "# ")
+					}
+
+					for sc.Scan() {
+						line := sc.Text()
+						if err := inst.Policy.Rule.Append(line, upstream); err != nil {
+							return nil, plugin.Error("load", err)
+						}
+					}
+				}
+			}
+		case "geo_database":
+			params := c.RemainingArgs()
+			if len(params) != 1 {
+				return nil, plugin.Error("load", fmt.Errorf("invalid geo_database args=%+v", params))
+			}
+
+			if inst.Policy.GEO == nil {
+				inst.Policy.GEO = new(geo.GEO)
+			}
+			if err := inst.Policy.GEO.Open(params[0]); err != nil {
+				return nil, plugin.Error("load", fmt.Errorf("invalid geo_database file=%s err=%+v", params[0], err))
+			}
 		case "geo":
 			params := c.RemainingArgs()
-			if len(params) != 1 {
-				return nil, plugin.Error("pforward", fmt.Errorf("invalid geo args=%+v", params))
+			if len(params) != 2 {
+				return nil, plugin.Error("load", fmt.Errorf("invalid geo args=%+v", params))
 			}
 
-			var err error
-			p.GeoDatabase, err = geoip2.Open(params[0])
-			if err != nil {
-				return nil, plugin.Error("pforward", fmt.Errorf("invalid geo database err=%+v", err))
+			if inst.Policy.GEO == nil {
+				inst.Policy.GEO = new(geo.GEO)
 			}
-
-			log.Infof("[load] load geoip")
-		case "block_ipv6":
-			p.BlockAAAA = true
-
-			log.Infof("[load] block_ipv6")
-		case "timeout":
-			params := c.RemainingArgs()
-			if len(params) != 1 {
-				return nil, plugin.Error("pforward", fmt.Errorf("invalid timeout args=%+v", params))
-			}
-
-			t, err := strconv.Atoi(params[0])
-			if err != nil {
-				return nil, plugin.Error("pforward", fmt.Errorf("invalid timeout err=%+v", err))
-			}
-
-			p.Timeout = time.Millisecond * time.Duration(t)
-			log.Infof("[load] timeout=%dmilli", t)
+			inst.Policy.GEO.Append(params[0], params[1])
 		default:
-			p.Policy.AddRule(".", name)
+			log.Debugf("invalid option=%s", name)
 		}
 	}
 
-	log.Infof("[load] rule count=%d", p.Policy.Count())
-	return p, nil
+	return inst, nil
 }

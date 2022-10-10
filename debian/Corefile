@@ -1,18 +1,24 @@
 # Default Corefile, see https://coredns.io for more information.
+# For PForward configuration, see https://github.com/newcoderlife/pforward for help.
 
 . {
     bind 0.0.0.0
 
     pforward {
-        auto 114.114.114.114 1.1.1.1
-        geo /etc/coredns/GeoLite2-Country.mmdb
-        block_ipv6
-        timeout 1000
+        default https://1.1.1.1/dns-query
+
+        ruleset /etc/coredns/rules/
+
+        geo_database /etc/coredns/GeoLite2-Country.mmdb
+        geo cn https://1.12.12.12/dns-query
     }
 
-    cache
+    template ANY AAAA {
+        rcode NXDOMAIN
+    }
 
-    log
-    debug
+    cache {
+        success 65536
+    }
     errors
 }

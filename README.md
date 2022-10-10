@@ -1,20 +1,32 @@
-# PolicyForward
+# Policy Forward
 
 ## Info
 
-A CoreDNS plugin for domain policy forward.
+A CoreDNS plugin for domain and GEO policy forward.
 
 ## Config
 
 ```
-.:53 {
-    pforward {
-        policy /etc/coredns/google.policy 1.1.1.1 // domain in policy file using 1.1.1.1:53
+. {
+    bind 0.0.0.0
 
-        auto 114.114.114.114 1.1.1.1              // judge response GEO and make correct answer
-        geo /etc/coredns/GeoLite2-Country.mmdb.db // maxmind datebase location
-        block_ipv6                                // block all AAAA response
+    pforward {
+        default https://1.1.1.1/dns-query
+
+        ruleset /etc/coredns/rules/
+
+        geo_database /etc/coredns/GeoLite2-Country.mmdb
+        geo cn https://1.12.12.12/dns-query
     }
+
+    template ANY AAAA {
+        rcode NXDOMAIN
+    }
+
+    cache {
+        success 65536
+    }
+    errors
 }
 ```
 
@@ -22,4 +34,4 @@ A CoreDNS plugin for domain policy forward.
 
 You can build from source. Require golang latest version from [official](https://go.dev/dl/).
 
-Or download linux_amd64 binary and debian package from [Github Actions](https://github.com/newcoderlife/pforward/actions).
+Or download debian package for linux64 from [Releases](https://github.com/newcoderlife/pforward/releases).
