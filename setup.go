@@ -2,6 +2,7 @@ package pforward
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -11,13 +12,11 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/newcoderlife/pforward/forward"
 	"github.com/newcoderlife/pforward/geo"
 	"github.com/newcoderlife/pforward/rule"
 )
-
-var log = clog.NewWithPlugin("pforword")
 
 func init() { plugin.Register("pforward", setup) }
 
@@ -116,5 +115,7 @@ func load(c *caddy.Controller) (*forward.Instance, error) {
 		}
 	}
 
+	result, _ := json.Marshal(inst)
+	log.Infof("instance=%s", string(result))
 	return inst, nil
 }
