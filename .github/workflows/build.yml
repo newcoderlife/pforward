@@ -48,7 +48,7 @@ jobs:
           VERSION: ${{ github.ref_name }}
           SHELL: /usr/bin/bash
         run: |
-          sudo apt install debhelper dh-systemd base-files -y
+          sudo apt install debhelper base-files dpkg-dev jq -y
           cd $GITHUB_WORKSPACE/pforward
           dpkg-buildpackage -us -uc -b
           echo "DEB=$(find ../ -iname *.deb -exec basename -- {} \;)" >> $GITHUB_ENV

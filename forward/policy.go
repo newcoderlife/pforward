@@ -18,9 +18,6 @@ type Policy struct {
 
 // handleRequestPolicy 根据规则文件判断上游，未命中则返回默认
 func (p Policy) handleRequestPolicy(request *dns.Msg) string {
-	if request == nil || len(request.Question) == 0 {
-		return ""
-	}
 	return p.Rule.Match(parseDomain(request))
 }
 
@@ -37,9 +34,13 @@ func (p Policy) handleResponsePolicy(response *dns.Msg) string {
 			addr = v.A
 		case *dns.AAAA:
 			addr = v.AAAA
+		default:
+			log.Debugf("answer=%+v", answer)
+			return p.Default
 		}
 
 		if upstream := p.GEO.Match(addr); len(upstream) > 0 {
+			log.Debugf("address=%s upstream=%s", addr.String(), upstream)
 			return upstream
 		}
 	}
@@ -48,7 +49,6 @@ func (p Policy) handleResponsePolicy(response *dns.Msg) string {
 
 func (p Policy) Forward(request *dns.Msg) (response *dns.Msg, err error) {
 	if remote := p.handleRequestPolicy(request); len(remote) > 0 {
-		log.Infof("domain=%s upstream=%s", parseDomain(request), remote)
 		return upstream.Choose(remote).Forward(request)
 	}
 
@@ -59,15 +59,14 @@ func (p Policy) Forward(request *dns.Msg) (response *dns.Msg, err error) {
 
 	postRemote := p.handleResponsePolicy(response)
 	if postRemote == p.Default {
-		log.Infof("domain=%s upstream=%s", parseDomain(request), p.Default)
 		return response, nil
 	}
-	log.Infof("domain=%s upstream=%s", parseDomain(request), postRemote)
 	return upstream.Choose(postRemote).Forward(request)
 }
 
 func parseDomain(request *dns.Msg) string {
 	if request == nil || len(request.Question) == 0 {
+		log.Debugf("empty request=%s", request.String())
 		return ""
 	}
 	return strings.TrimSuffix(request.Question[0].Name, ".")
