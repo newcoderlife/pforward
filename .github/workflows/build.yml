@@ -26,7 +26,7 @@ jobs:
       - name: Prepare Golang
         uses: actions/setup-go@v3
         with:
-          go-version: "1.19"
+          go-version: "1.21"
           cache: true
           cache-dependency-path: |
             coredns/go.sum
@@ -36,8 +36,10 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/coredns
           echo "pforward:github.com/newcoderlife/pforward" >> plugin.cfg
+          echo "mdns:github.com/openshift/coredns-mdns" >> plugin.cfg
           make gen
           go get github.com/newcoderlife/pforward@$GITHUB_SHA && go mod tidy -go=1.16 && go mod tidy -go=1.17
+          go get github.com/openshift/coredns-mdns && go mod tidy -go=1.16 && go mod tidy -go=1.17
           make
           echo "VERSION=$(git --no-pager log --date=format:%Y%m%d --pretty=0.0~git%cd.%h -1;)" >> $GITHUB_ENV
 
