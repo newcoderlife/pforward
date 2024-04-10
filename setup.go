@@ -100,6 +100,39 @@ func parseForward(c *caddy.Controller) ([]*PForward, error) {
 	return fs, nil
 }
 
+func readRuleset(path string) ([]string, error) {
+	dirname := filepath.Dir(path)
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid path=%s err=%v", path, err)
+	}
+
+	zones := make([]string, 0)
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if len(line) == 0 || line[0] == '#' {
+			continue
+		}
+
+		if strings.HasPrefix(line, "include:") {
+			subrules, err := readRuleset(filepath.Join(dirname, strings.TrimSpace(strings.TrimPrefix(line, "include:"))))
+			if err != nil {
+				return nil, fmt.Errorf("unable to read include file '%s': %v", line, err)
+			}
+			zones = append(zones, subrules...)
+		} else {
+			zones = append(zones, plugin.Host(line).NormalizeExact()...)
+		}
+	}
+
+	if len(zones) == 0 {
+		return nil, fmt.Errorf("unable to normalize file '%s'", path)
+	}
+	return zones, nil
+}
+
 func parseFrom(c *caddy.Controller) ([]string, error) {
 	var path string
 	if ok := c.Args(&path); !ok {
@@ -108,22 +141,7 @@ func parseFrom(c *caddy.Controller) ([]string, error) {
 
 	info, err := os.Stat(path)
 	if err == nil && !info.IsDir() {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, fmt.Errorf("invalid path=%s err=%v", path, err)
-		}
-
-		zones := make([]string, 0)
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			line := strings.TrimSpace(sc.Text())
-			zones = append(zones, plugin.Host(line).NormalizeExact()...)
-		}
-
-		if len(zones) == 0 {
-			return nil, fmt.Errorf("unable to normalize file '%s'", path)
-		}
-		return zones, nil
+		return readRuleset(path)
 	}
 
 	zones := plugin.Host(path).NormalizeExact()

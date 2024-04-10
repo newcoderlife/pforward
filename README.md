@@ -14,7 +14,7 @@ A CoreDNS plugin for domain and GEO policy forward. Fork from official forward p
     cache
     metadata
 
-    log `{type} {name} {/pforward/upstream} {duration} {/pforward/response/ip}`
+    log . "{type} {name} {/pforward/upstream} {duration} {/pforward/response/ip}"
 }
 
 .:60001 {
@@ -56,7 +56,7 @@ A CoreDNS plugin for domain and GEO policy forward. Fork from official forward p
 .:53 {
     bind 0.0.0.0
 
-    pforward /etc/coredns/rules/ruleset.noncn 127.0.0.1:60001 127.0.0.1:60002
+    pforward /etc/coredns/rules/noncn 127.0.0.1:60001 127.0.0.1:60002
     pforward . 127.0.0.1:60003 127.0.0.1:60004
 
     template ANY AAAA {
