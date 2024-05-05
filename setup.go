@@ -336,6 +336,24 @@ func parseBlock(c *caddy.Controller, f *PForward) error {
 		}
 		f.ErrLimitExceeded = errors.New("concurrent queries exceeded maximum " + c.Val())
 		f.maxConcurrent = int64(n)
+	case "backup_request":
+		if !c.NextArg() {
+			return c.ArgErr()
+		}
+		backupDuration, err := time.ParseDuration(c.Val())
+		if err != nil {
+			return c.ArgErr()
+		}
+		f.backupDuration = backupDuration
+		/* // 暂不支持 threshold
+		threshold := 0.1
+		if c.NextArg() {
+			threshold, err = strconv.ParseFloat(c.Val(), 64)
+			if err != nil {
+				return c.ArgErr()
+			}
+		}
+		*/
 
 	default:
 		return c.Errf("unknown property '%s'", c.Val())

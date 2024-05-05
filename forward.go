@@ -8,6 +8,8 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -49,6 +51,8 @@ type PForward struct {
 	expire        time.Duration
 	maxConcurrent int64
 
+	backupDuration time.Duration // duration=0: disabled
+
 	opts proxy.Options // also here for testing
 
 	// ErrLimitExceeded indicates that a query was rejected because the number of concurrent queries has exceeded
@@ -86,7 +90,56 @@ func (f *PForward) Len() int { return len(f.proxies) }
 // Name implements plugin.Handler.
 func (f *PForward) Name() string { return "forward" }
 
-// ServeDNS implements plugin.Handler.
+type TaskResult struct {
+	Result *dns.Msg
+	Err    error
+	Backup bool
+}
+
+func (f *PForward) ConnectWithTimeout(ctx context.Context, state request.Request, proxies []*proxy.Proxy, opts proxy.Options) (*dns.Msg, error) {
+	if len(proxies) == 0 {
+		return nil, ErrNoForward
+	}
+	if f.backupDuration == 0 || len(proxies) == 1 {
+		return proxies[0].Connect(ctx, state, opts)
+	}
+
+	results := make(chan *TaskResult, len(proxies))
+	defer func() { close(results) }()
+	ctx, cancel := context.WithTimeout(ctx, f.backupDuration)
+	defer cancel()
+
+	go func() { // first request
+		ret, err := proxies[0].Connect(ctx, state, opts)
+		results <- &TaskResult{Result: ret, Err: err}
+	}()
+
+	go func() { // backup request
+		select {
+		case <-ctx.Done():
+		case <-time.After(f.backupDuration):
+			ret, err := proxies[1].Connect(ctx, state, opts)
+			results <- &TaskResult{Result: ret, Err: err, Backup: true}
+		}
+	}()
+
+	count := 0
+	for result := range results {
+		if result != nil && result.Err == nil {
+			metadata.SetValueFunc(ctx, "pforward/backup", func() string {
+				return strconv.FormatBool(result.Backup)
+			})
+			return result.Result, nil
+		}
+		if count++; count == 2 {
+			break
+		}
+	}
+
+	return nil, fmt.Errorf("all upstreams failed")
+}
+
+// ServeDNS implements plugin.Handler. // TODO need refactoring
 func (f *PForward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
 	if !f.match(state) {
@@ -118,6 +171,7 @@ func (f *PForward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 		}
 
 		proxy := list[i]
+		currentProxies := list[i:]
 		i++
 		if proxy.Down(f.maxfails) {
 			fails++
@@ -149,7 +203,7 @@ func (f *PForward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 		opts := f.opts
 
 		for {
-			ret, err = proxy.Connect(ctx, state, opts)
+			ret, err = f.ConnectWithTimeout(ctx, state, currentProxies, opts)
 
 			if err == ErrCachedClosed { // Remote side closed conn, can only happen with TCP.
 				continue
