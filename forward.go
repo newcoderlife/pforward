@@ -105,7 +105,6 @@ func (f *PForward) ConnectWithTimeout(ctx context.Context, state request.Request
 	}
 
 	results := make(chan *TaskResult, len(proxies))
-	defer func() { close(results) }()
 	ctx, cancel := context.WithTimeout(ctx, f.backupDuration)
 	defer cancel()
 
