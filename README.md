@@ -51,8 +51,10 @@ A CoreDNS plugin for domain and GEO policy forward. Fork from official forward p
     bind 0.0.0.0
 
     cache {
+        success 65536 1440 1440
         serve_stale
         servfail 0
+        prefetch 5 1h 10%
         disable denial
         keepttl
     }
