@@ -127,9 +127,6 @@ func readRuleset(path string) ([]string, error) {
 		}
 	}
 
-	if len(zones) == 0 {
-		return nil, fmt.Errorf("unable to normalize file '%s'", path)
-	}
 	return zones, nil
 }
 
@@ -141,7 +138,11 @@ func parseFrom(c *caddy.Controller) ([]string, error) {
 
 	info, err := os.Stat(path)
 	if err == nil && !info.IsDir() {
-		return readRuleset(path)
+		zones, err := readRuleset(path)
+		if len(zones) == 0 || err != nil {
+			return nil, fmt.Errorf("unable to normalize '%s' '%v'", path, err)
+		}
+		return zones, nil
 	}
 
 	zones := plugin.Host(path).NormalizeExact()

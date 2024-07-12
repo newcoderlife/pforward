@@ -1,0 +1,14 @@
+tmp/
+*.deb
+*.tar
+
+debian/.debhelper/
+debian/coredns.debhelper.log
+debian/coredns.postinst.debhelper
+debian/coredns.postrm.debhelper
+debian/coredns.prerm.debhelper
+debian/coredns.substvars
+debian/coredns
+debian/debhelper-build-stamp
+debian/files
+debian/man/
