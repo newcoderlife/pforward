@@ -3,66 +3,94 @@ name: Build CoreDNS With PForward
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 jobs:
   Build-CoreDNS-With-PForward:
     runs-on: ubuntu-latest
     steps:
-      - name: Print Environment
-        run: env
-
       - name: Clone PForward
-        uses: actions/checkout@v3
-        with:
-          path: pforward
-
-      - name: Clone CoreDNS
-        uses: actions/checkout@v3
-        with:
-          repository: coredns/coredns
-          path: coredns
+        uses: actions/checkout@v4
+      
+      - name: Set Go Version
+        run: |
+          make clone-dependency
+          echo "GO_VERSION=$(make go-version)" >> $GITHUB_ENV
 
       - name: Prepare Golang
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
-          cache: true
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: |
             coredns/go.sum
             pforward/go.sum
 
-      - name: Make CoreDNS
-        run: |
-          cd $GITHUB_WORKSPACE/coredns
-          echo "pforward:github.com/newcoderlife/pforward" >> plugin.cfg
-          echo "mdns:github.com/openshift/coredns-mdns" >> plugin.cfg
-          make gen
-          go get github.com/newcoderlife/pforward@$GITHUB_SHA && go mod tidy -go=1.16 && go mod tidy -go=1.17
-          go get github.com/openshift/coredns-mdns && go mod tidy -go=1.16 && go mod tidy -go=1.17
-          make
-          echo "VERSION=$(git --no-pager log --date=format:%Y%m%d --pretty=0.0~git%cd.%h -1;)" >> $GITHUB_ENV
+      - name: Prepare QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Package CoreDNS
-        env:
-          BIN: ${{ github.workspace }}/coredns/coredns
-          SRC: ${{ github.workspace }}/coredns
-          VERSION: ${{ github.ref_name }}
-          SHELL: /usr/bin/bash
+      - name: Prepare Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CoreDNS
         run: |
-          sudo apt install debhelper base-files dpkg-dev jq -y
-          cd $GITHUB_WORKSPACE/pforward
-          dpkg-buildpackage -us -uc -b
-          echo "DEB=$(find ../ -iname *.deb -exec basename -- {} \;)" >> $GITHUB_ENV
+          make prepare-docker
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          push: true
+          tags: ghcr.io/newcoderlife/coredns:latest
+          no-cache: true
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ${{ env.DEB }}
+          files: |
+            *.deb
 
-      - name: Upload Package
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ env.DEB }}
-          path: ${{ github.workspace }}/${{ env.DEB }}
+      - name: Test Docker Image
+        if: ${{ success() }}
+        run: |
+          make test
+
+      - name: Debug Environment
+        if: ${{ failure() }}
+        run: |
+          sudo apt-get update && sudo apt-get install wireguard openssh-server -y
+          sudo tee /etc/wireguard/wg0.conf > /dev/null <<EOL
+          [Interface]
+          PrivateKey = ${{ secrets.DEBUG_PRIVKEY }}
+          Address = 192.168.103.2/24
+          [Peer]
+          PublicKey = ${{ secrets.DEBUG_PUBKEY }}
+          AllowedIPs = 192.168.103.0/24
+          Endpoint = ${{ secrets.DEBUG_REMOTE }}
+          PresharedKey = ${{ secrets.DEBUG_PSKEY }}
+          PersistentKeepalive = 10
+          EOL
+          sudo systemctl start wg-quick@wg0
+          mkdir -p /home/runner/.ssh
+          echo "${{ secrets.DEBUG_SSHPUB }}" >> /home/runner/.ssh/authorized_keys
+          cat /home/runner/.ssh/authorized_keys
+          
+          if sudo grep -q "^#PubkeyAuthentication" /etc/ssh/sshd_config; then
+            sudo sed -i 's/^#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+          elif sudo grep -q "^PubkeyAuthentication" /etc/ssh/sshd_config; then
+            sudo sed -i 's/^PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+          else
+            sudo echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
+          fi
+          sudo systemctl restart sshd
+          sudo service ssh restart
+
+          sleep 300
