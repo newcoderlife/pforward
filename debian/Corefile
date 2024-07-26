@@ -46,6 +46,9 @@
     }
     metadata
 
+    pforward /etc/coredns/rules/unlock 1.1.1.1 {
+        expire 5s
+    }
     pforward /etc/coredns/rules/noncn 127.0.0.1:60001 127.0.0.1:60002 {
         policy round_robin
         backup_request 3s

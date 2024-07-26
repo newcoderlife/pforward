@@ -2,7 +2,9 @@
 
 set -ex
 
-if [ ! -x "/etc/coredns/rules/run.sh" ]; then
+whoami
+
+if [ ! -f "/etc/coredns/rules/run.sh" ]; then
   rm -rf /etc/coredns/rules
   git clone https://github.com/newcoderlife/ruleset.git --depth 1 /etc/coredns/rules
 fi
