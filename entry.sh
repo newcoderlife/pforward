@@ -2,6 +2,8 @@
 
 set -ex
 
+sleep 15
+
 whoami
 
 if [ ! -f "/etc/coredns/rules/run.sh" ]; then
