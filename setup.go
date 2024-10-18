@@ -95,7 +95,7 @@ func parseForward(c *caddy.Controller) ([]*PForward, error) {
 			return nil, err
 		}
 		fs = append(fs, f)
-		log.Infof("Forwarding configured for %+v", f.from)
+		log.Infof("Forwarding configured for %+v", Format(f.from))
 	}
 	return fs, nil
 }
@@ -155,10 +155,12 @@ func parseFrom(c *caddy.Controller) ([]string, error) {
 func parseStanza(c *caddy.Controller) (*PForward, error) {
 	f := New()
 
-	var err error
-	f.from, err = parseFrom(c)
+	from, err := parseFrom(c)
 	if err != nil {
 		return f, err
+	}
+	for _, domain := range from {
+		f.from = InsertDomain(domain, f.from)
 	}
 
 	to := c.RemainingArgs()
@@ -224,7 +226,9 @@ func parseBlock(c *caddy.Controller, f *PForward) error {
 			return c.ArgErr()
 		}
 		for i := 0; i < len(ignore); i++ {
-			f.ignored = append(f.ignored, plugin.Host(ignore[i]).NormalizeExact()...)
+			for _, domain := range plugin.Host(ignore[i]).NormalizeExact() {
+				f.ignored = InsertDomain(domain, f.ignored)
+			}
 		}
 	case "max_fails":
 		if !c.NextArg() {

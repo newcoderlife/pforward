@@ -64,35 +64,3 @@ jobs:
           files: |
             *.deb
             *.tar
-
-      - name: Debug Environment
-        if: ${{ failure() }}
-        run: |
-          sudo apt-get update && sudo apt-get install wireguard openssh-server -y
-          sudo tee /etc/wireguard/wg0.conf > /dev/null <<EOL
-          [Interface]
-          PrivateKey = ${{ secrets.DEBUG_PRIVKEY }}
-          Address = 192.168.103.2/24
-          [Peer]
-          PublicKey = ${{ secrets.DEBUG_PUBKEY }}
-          AllowedIPs = 192.168.103.0/24
-          Endpoint = ${{ secrets.DEBUG_REMOTE }}
-          PresharedKey = ${{ secrets.DEBUG_PSKEY }}
-          PersistentKeepalive = 10
-          EOL
-          sudo systemctl start wg-quick@wg0
-          mkdir -p /home/runner/.ssh
-          echo "${{ secrets.DEBUG_SSHPUB }}" >> /home/runner/.ssh/authorized_keys
-          cat /home/runner/.ssh/authorized_keys
-          
-          if sudo grep -q "^#PubkeyAuthentication" /etc/ssh/sshd_config; then
-            sudo sed -i 's/^#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-          elif sudo grep -q "^PubkeyAuthentication" /etc/ssh/sshd_config; then
-            sudo sed -i 's/^PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-          else
-            sudo echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
-          fi
-          sudo systemctl restart sshd
-          sudo service ssh restart
-
-          sleep 300

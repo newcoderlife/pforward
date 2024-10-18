@@ -42,8 +42,8 @@ type PForward struct {
 	p          Policy
 	hcInterval time.Duration
 
-	from    []string
-	ignored []string
+	from    *TrieNode
+	ignored *TrieNode
 
 	tlsConfig     *tls.Config
 	tlsServerName string
@@ -66,7 +66,7 @@ type PForward struct {
 
 // New returns a new Forward.
 func New() *PForward {
-	f := &PForward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(random), from: []string{"."}, hcInterval: hcInterval, opts: proxy.Options{ForceTCP: false, PreferUDP: false, HCRecursionDesired: true, HCDomain: "."}}
+	f := &PForward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(random), hcInterval: hcInterval, opts: proxy.Options{ForceTCP: false, PreferUDP: false, HCRecursionDesired: true, HCDomain: "."}}
 	return f
 }
 
@@ -275,23 +275,7 @@ func (f *PForward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 }
 
 func (f *PForward) match(state request.Request) bool {
-	for _, name := range f.from {
-		if plugin.Name(name).Matches(state.Name()) {
-			return f.isAllowedDomain(state.Name())
-		}
-	}
-
-	return false
-}
-
-func (f *PForward) isAllowedDomain(name string) bool {
-	for _, ignore := range f.ignored {
-		if plugin.Name(ignore).Matches(name) {
-			return false
-		}
-	}
-
-	return true
+	return FindDomainSuffix(state.Name(), f.from) && !FindDomainSuffix(state.Name(), f.ignored)
 }
 
 // ForceTCP returns if TCP is forced to be used even when the request comes in over UDP.
