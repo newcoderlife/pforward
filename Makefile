@@ -25,7 +25,6 @@ clone-dependency:
 .PHONY: build-coredns
 build-coredns: install-dependency clone-dependency
 	@echo "pforward:github.com/newcoderlife/pforward" >> ./tmp/coredns/plugin.cfg
-	@echo "mdns:github.com/openshift/coredns-mdns" >> ./tmp/coredns/plugin.cfg
 	@cat ./tmp/coredns/plugin.cfg
 	@$(MAKE) -C ./tmp/coredns/ gen
 	@cd ./tmp/coredns && go get "github.com/newcoderlife/pforward@$(VERSION)"
