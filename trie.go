@@ -66,6 +66,9 @@ func Insert(segments []string, root *TrieNode) {
 }
 
 func FindDomainSuffix(domain string, current *TrieNode) bool {
+	if current == nil {
+		return false
+	}
 	if current.End {
 		return true
 	}
@@ -77,6 +80,9 @@ func FindDomainSuffix(domain string, current *TrieNode) bool {
 		}
 
 		current = current.Children[segment]
+		if current == nil {
+			return false
+		}
 		if current.End {
 			return true
 		}
@@ -90,7 +96,13 @@ func Format(root *TrieNode) []string {
 }
 
 func dfs(current *TrieNode, domain string, results []string) []string {
+	if current == nil {
+		return nil
+	}
 	if current.End {
+		if domain == "" {
+			return append(results, ".")
+		}
 		return append(results, domain)
 	}
 

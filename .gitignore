@@ -1,6 +1,10 @@
 tmp/
 *.deb
 *.tar
+build/
+rules/
+coredns
+Corefile.test
 
 debian/.debhelper/
 debian/coredns.debhelper.log

@@ -19,7 +19,7 @@ func randomString(length int) string {
 }
 
 func generateRandomDomain() (domain string) {
-	for i := 0; i < rand.Intn(3); i++ {
+	for i := 0; i < rand.Intn(3)+1; i++ {
 		domain = fmt.Sprintf("%s.%s", randomString(rand.Intn(9)+1), domain)
 	}
 
@@ -35,17 +35,32 @@ func generateDomains(n int) []string {
 }
 
 func TestTrie(t *testing.T) {
-	domains := generateDomains(1e6)
+	domains := generateDomains(10)
 	t.Logf("domains=%+v", domains)
 
-	root := &TrieNode{Current: "."}
+	var root *TrieNode
 	for _, domain := range domains {
 		root = InsertDomain(domain, root)
 	}
 
 	results := Format(root)
-	t.Logf("results=%+v", results)
+	t.Errorf("results=%+v", results)
 
+	for _, domain := range domains {
+		if !FindDomainSuffix(domain, root) {
+			t.Errorf("domain=%s not match", domain)
+		}
+	}
+}
+
+func TestEdgeCase(t *testing.T) {
+	root := InsertDomain(".", nil)
+
+	results := Format(root)
+	t.Errorf("results=%+v", results)
+
+	domains := generateDomains(1e6)
+	// t.Logf("domains=%+v", domains)
 	for _, domain := range domains {
 		if !FindDomainSuffix(domain, root) {
 			t.Errorf("domain=%s not match", domain)
