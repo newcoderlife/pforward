@@ -20,7 +20,6 @@ import (
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/proxy"
 	"github.com/coredns/coredns/request"
-
 	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
 	otext "github.com/opentracing/opentracing-go/ext"
@@ -42,8 +41,7 @@ type PForward struct {
 	p          Policy
 	hcInterval time.Duration
 
-	from    *TrieNode
-	ignored *TrieNode
+	from atomic.Pointer[TrieNode]
 
 	tlsConfig     *tls.Config
 	tlsServerName string
@@ -275,7 +273,7 @@ func (f *PForward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 }
 
 func (f *PForward) match(state request.Request) bool {
-	return FindDomainSuffix(state.Name(), f.from) && !FindDomainSuffix(state.Name(), f.ignored)
+	return FindDomainSuffix(state.Name(), f.from.Load())
 }
 
 // ForceTCP returns if TCP is forced to be used even when the request comes in over UDP.

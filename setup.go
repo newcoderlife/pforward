@@ -19,7 +19,6 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/proxy"
 	pkgtls "github.com/coredns/coredns/plugin/pkg/tls"
 	"github.com/coredns/coredns/plugin/pkg/transport"
-
 	"github.com/miekg/dns"
 )
 
@@ -95,7 +94,7 @@ func parseForward(c *caddy.Controller) ([]*PForward, error) {
 			return nil, err
 		}
 		fs = append(fs, f)
-		log.Infof("Forwarding configured for %+v", Format(f.from))
+		log.Infof("Forwarding configured for %+v", Format(f.from.Load()))
 	}
 	return fs, nil
 }
@@ -130,37 +129,65 @@ func readRuleset(path string) ([]string, error) {
 	return zones, nil
 }
 
-func parseFrom(c *caddy.Controller) ([]string, error) {
-	var path string
+func parseFrom(c *caddy.Controller, f *PForward) error {
+	var (
+		from *TrieNode
+		path string
+	)
 	if ok := c.Args(&path); !ok {
-		return nil, c.ArgErr()
+		return c.ArgErr()
 	}
 
 	info, err := os.Stat(path)
 	if err == nil && !info.IsDir() {
 		zones, err := readRuleset(path)
 		if len(zones) == 0 || err != nil {
-			return nil, fmt.Errorf("unable to normalize '%s' '%v'", path, err)
+			return fmt.Errorf("unable to normalize '%s' '%v'", path, err)
 		}
-		return zones, nil
+
+		for _, domain := range zones {
+			from = InsertDomain(domain, from)
+		}
+		f.from.Store(from)
+
+		go func() {
+			ticker := time.NewTicker(time.Minute)
+			for range ticker.C {
+				zones, err := readRuleset(path)
+				if len(zones) == 0 || err != nil {
+					log.Errorf("update domains err=%v", err)
+					continue
+				}
+
+				for _, domain := range zones {
+					from = InsertDomain(domain, from)
+				}
+				f.from.Store(from)
+				log.Infof("update domains=%s", Format(f.from.Load()))
+			}
+		}()
+
+		return nil
 	}
 
 	zones := plugin.Host(path).NormalizeExact()
 	if len(zones) == 0 {
-		return nil, fmt.Errorf("unable to normalize '%s'", path)
+		return fmt.Errorf("unable to normalize '%s'", path)
 	}
-	return zones, nil
+
+	for _, domain := range zones {
+		from = InsertDomain(domain, from)
+	}
+	f.from.Store(from)
+
+	return nil
 }
 
 func parseStanza(c *caddy.Controller) (*PForward, error) {
 	f := New()
 
-	from, err := parseFrom(c)
-	if err != nil {
+	if err := parseFrom(c, f); err != nil {
 		return f, err
-	}
-	for _, domain := range from {
-		f.from = InsertDomain(domain, f.from)
 	}
 
 	to := c.RemainingArgs()
@@ -220,16 +247,6 @@ func parseStanza(c *caddy.Controller) (*PForward, error) {
 func parseBlock(c *caddy.Controller, f *PForward) error {
 	config := dnsserver.GetConfig(c)
 	switch c.Val() {
-	case "except":
-		ignore := c.RemainingArgs()
-		if len(ignore) == 0 {
-			return c.ArgErr()
-		}
-		for i := 0; i < len(ignore); i++ {
-			for _, domain := range plugin.Host(ignore[i]).NormalizeExact() {
-				f.ignored = InsertDomain(domain, f.ignored)
-			}
-		}
 	case "max_fails":
 		if !c.NextArg() {
 			return c.ArgErr()
